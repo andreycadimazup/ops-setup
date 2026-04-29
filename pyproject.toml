@@ -1,0 +1,21 @@
+[project]
+name = "ops-setup"
+version = "0.1.0"
+description = "Zup Labs One Person Squad setup tool"
+readme = "README.md"
+authors = [
+    { name = "andreycadimazup", email = "andrey.dias@zup.com.br" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pygithub>=2.9.1",
+    "python-dotenv>=1.2.2",
+    "questionary>=2.1.1",
+]
+
+[project.scripts]
+ops-setup = "ops_setup:main"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
