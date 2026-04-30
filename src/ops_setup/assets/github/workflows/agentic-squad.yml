@@ -1,0 +1,107 @@
+name: "🤖 Multi-Provider Agentic Squad"
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [labeled, synchronize, opened]
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Escolha o Provider (gemini, claude, copilot, codex)'
+        required: true
+        default: '$PROVIDER'
+        type: choice
+        options:
+          - gemini
+          - claude
+          - copilot
+          - codex
+
+jobs:
+  orchestrate:
+    # Dispara se houver uma label de 'status:', um comentário, ou dispatch manual
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.issue.labels.*.name, 'status:') || 
+      contains(github.event.pull_request.labels.*.name, 'status:') ||
+      github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      repository-projects: write
+
+    env:
+      SELECTED_PROVIDER: ${{ github.event.inputs.provider || '$PROVIDER' }}
+      GH_PROMPT_DISABLED: 1
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # --- SETUP GEMINI CLI ---
+      - name: Setup Gemini CLI
+        if: env.SELECTED_PROVIDER == 'gemini'
+        run: |
+          npm install -g @google/gemini-cli
+
+      # --- SETUP CLAUDE CODE ---
+      - name: Setup Claude Code
+        if: env.SELECTED_PROVIDER == 'claude'
+        run: npm install -g @anthropic-ai/claude-code
+
+      # --- SETUP GITHUB COPILOT ---
+      - name: Setup GitHub Copilot
+        if: env.SELECTED_PROVIDER == 'copilot'
+        run: |
+          gh extension install github/gh-copilot
+
+      # --- SETUP CODEX (OPENAI) ---
+      - name: Setup Codex (OpenAI)
+        if: env.SELECTED_PROVIDER == 'codex'
+        run: npm install -g openai
+
+      # --- EXECUTION (HEADLESS MODE) ---
+      - name: Run Orchestrator
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Determina o ID do contexto (Issue ou PR)
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          CONTEXT_ID="${ISSUE_NUMBER:-$PR_NUMBER}"
+          
+          # Prompt Base em Português (SOP do projeto)
+          PROMPT="Invoque o @orchestrator-skill para a issue/PR #$CONTEXT_ID. Analise o estado atual, leia o .agentic/SQUAD.md e delegue a tarefa para o especialista correto usando sub-agentes para economizar contexto."
+
+          if [ "$SELECTED_PROVIDER" == "gemini" ]; then
+            echo "Using Gemini CLI in Headless Mode..."
+            gemini -y "$PROMPT"
+          elif [ "$SELECTED_PROVIDER" == "claude" ]; then
+            echo "Using Claude Code in Headless Mode..."
+            # Claude Code utiliza --non-interactive para CI
+            claude --non-interactive "Utilize as definições em .agents/skills/ e execute: $PROMPT"
+          elif [ "$SELECTED_PROVIDER" == "copilot" ]; then
+            echo "Using GitHub Copilot..."
+            # Copilot CLI via 'gh' não possui um modo headless nativo de chat, 
+            # mas simulamos via 'explain' ou chamadas diretas que não pedem confirmação
+            gh copilot explain "$PROMPT"
+          elif [ "$SELECTED_PROVIDER" == "codex" ]; then
+            echo "Using Codex (OpenAI)..."
+            # OpenAI CLI é inerentemente não-interativo em chamadas de chat create
+            openai chat create -m gpt-4o -g user "Baseie-se nas skills em .agents/skills/ e execute: $PROMPT"
+          fi
