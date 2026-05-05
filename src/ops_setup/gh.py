@@ -1,10 +1,11 @@
 import os
 import urllib3
+from typing import Dict, List
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import questionary
-from github import Github, Auth, Repository, Branch
+from github import Github, Auth, Repository
 from github.GithubException import GithubException
 
 from dotenv import load_dotenv
@@ -19,12 +20,9 @@ gh = Github(
 
 
 def fetch_repo() -> Repository:
-    questionary.print("🔍 Fetching your GitHub repositories...")
+    questionary.print("Fetching your GitHub repositories...")
     repositories = [r.name for r in gh.get_user().get_repos()]
-    selected_repo = questionary.select(
-        "Select a repository:",
-        choices=repositories,
-    ).ask()
+    selected_repo = questionary.select("Select a repository:", choices=repositories).ask()
     repo = gh.get_user().get_repo(selected_repo)
     return repo
 
@@ -48,44 +46,48 @@ def create_repo_labels(repo: Repository):
                 color=label["color"],
                 description=label["description"]
             )
-            questionary.print(f'✔️ Label `{label["name"]}` created.')
+            questionary.print(f'Label `{label["name"]}` created.')
         except GithubException as e:
             if e.status == 422 and "already_exists" in str(e.data):
-                questionary.print(f'ℹ️ Label `{label["name"]}` already exists.')
+                questionary.print(f'Label `{label["name"]}` already exists.')
             else:
-                questionary.print(f'❌ Could not create label `{label["name"]}`: {e}')
+                questionary.print(f'Could not create label `{label["name"]}`: {e}')
         except Exception as e:
-            questionary.print(f'❌ Could not create label `{label["name"]}`: {e}')
+            questionary.print(f'Could not create label `{label["name"]}`: {e}')
 
 
 def create_repo_provider_secret(repo: Repository, selected_provider: str):
-    # Provider selection
-    provider_options = [
-        {"name": "gemini", "secret": "GEMINI_API_KEY"},
-        {"name": "claude", "secret": "ANTHROPIC_API_KEY"},
-        {"name": "copilot", "secret": "OPENAI_API_KEY"},
-        {"name": "codex", "secret": "GITHUB_TOKEN"},
-    ]
+    provider_options: Dict[str, List[str]] = {
+        "gemini":  ["GEMINI_API_KEY"],
+        "claude":  ["ANTHROPIC_API_KEY"],
+        "copilot": ["GITHUB_TOKEN"],
+        "codex":   ["OPENAI_API_KEY", "CODEX_API_KEY"],
+    }
 
-    provider_secret_name = next(
-        (p["secret"] for p in provider_options if p["name"] == selected_provider), None
-    )
+    provider_secrets = provider_options.get(selected_provider)
 
-    if provider_secret_name:
+    if not provider_secrets:
+        questionary.print("No provider selected.")
+        return
+
+    for secret_name in provider_secrets:
         secret_value = questionary.password(
-            f"Enter the value for secret '{provider_secret_name}':"
+            f"Enter the value for secret '{secret_name}':"
         ).ask()
+
+        if not secret_value:
+            questionary.print(f"Secret '{secret_name}' was not provided, skipping.")
+            continue
+
         try:
-            repo.create_secret(provider_secret_name, secret_value)
-            questionary.print(f"✅ Secret '{provider_secret_name}' set successfully.")
+            repo.create_secret(secret_name, secret_value)
+            questionary.print(f"Secret '{secret_name}' set successfully.")
         except Exception as e:
-            questionary.print(f"❌ Could not set secret '{provider_secret_name}': {e}")
-    else:
-        questionary.print("❌ No provider selected.")
+            questionary.print(f"Could not set secret '{secret_name}': {e}")
 
 
 def prepare_ops_setup_branch(repo: Repository, branch_name: str):
-    questionary.print(f"🌱 Creating setup branch '{branch_name}'")
+    questionary.print(f"Creating setup branch '{branch_name}'")
 
     source_branch = repo.get_branch("main")
     source_sha = source_branch.commit.sha
@@ -99,19 +101,8 @@ def prepare_ops_setup_branch(repo: Repository, branch_name: str):
         pass
 
 
-def create_file(
-    repo: Repository,
-    path: str,
-    message: str,
-    content: str,
-    branch: str,
-):
-    repo.create_file(
-        path=path,
-        message=message,
-        content=content,
-        branch=branch
-    )
+def create_file(repo: Repository, path: str, message: str, content: str, branch: str):
+    repo.create_file(path=path, message=message, content=content, branch=branch)
 
 
 __all__ = [
