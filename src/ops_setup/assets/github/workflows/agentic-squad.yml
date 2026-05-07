@@ -70,7 +70,8 @@ jobs:
       # --- SETUP CODEX (OPENAI) ---
       - name: Setup Codex (OpenAI)
         if: env.SELECTED_PROVIDER == 'codex'
-        run: npm install -g openai
+        # run: npm install -g openai
+        run: npm i -g @openai/codex
 
       # --- EXECUTION (HEADLESS MODE) ---
       - name: Run Orchestrator
@@ -78,6 +79,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Determina o ID do contexto (Issue ou PR)
@@ -103,5 +105,6 @@ jobs:
           elif [ "$SELECTED_PROVIDER" == "codex" ]; then
             echo "Using Codex (OpenAI)..."
             # OpenAI CLI é inerentemente não-interativo em chamadas de chat create
-            openai chat create -m gpt-4o -g user "Baseie-se nas skills em .agents/skills/ e execute: $PROMPT"
+            # openai chat create -m gpt-4o -g user "Baseie-se nas skills em .agents/skills/ e execute: $PROMPT"
+            codex exec "Baseie-se nas skills em .agents/skills/ e execute: $PROMPT" --enable use_legacy_landlock --yolo
           fi

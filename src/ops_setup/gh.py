@@ -55,13 +55,17 @@ def create_repo_labels(repo: Repository):
         except Exception as e:
             questionary.print(f'Could not create label `{label["name"]}`: {e}')
 
+from typing import Dict, List
+import questionary
+from github.Repository import Repository  # adjust import to your actual Repository class
 
 def create_repo_provider_secret(repo: Repository, selected_provider: str):
     provider_options: Dict[str, List[str]] = {
         "gemini":  ["GEMINI_API_KEY"],
         "claude":  ["ANTHROPIC_API_KEY"],
         "copilot": ["GITHUB_TOKEN"],
-        "codex":   ["OPENAI_API_KEY", "CODEX_API_KEY"],
+        # Only ask for OPENAI_API_KEY; reuse it for CODEX_API_KEY
+        "codex":   ["OPENAI_API_KEY"],
     }
 
     provider_secrets = provider_options.get(selected_provider)
@@ -80,8 +84,17 @@ def create_repo_provider_secret(repo: Repository, selected_provider: str):
             continue
 
         try:
+            # Create the secret the user actually typed
             repo.create_secret(secret_name, secret_value)
             questionary.print(f"Secret '{secret_name}' set successfully.")
+
+            # For codex, also create CODEX_API_KEY from the same value
+            if selected_provider == "codex" and secret_name == "OPENAI_API_KEY":
+                repo.create_secret("CODEX_API_KEY", secret_value)
+                questionary.print(
+                    "Secret 'CODEX_API_KEY' set successfully using 'OPENAI_API_KEY'."
+                )
+
         except Exception as e:
             questionary.print(f"Could not set secret '{secret_name}': {e}")
 
